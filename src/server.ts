@@ -12,6 +12,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 
 import { LLMAnalyzer } from './analyzers/llm';
+import { VitalityAnalyzer } from './analyzers/vitality';
 import {
   AnalysisResult,
   LLMProxyRequest,
@@ -23,6 +24,7 @@ const connection = createConnection(ProposedFeatures.all);
 const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 
 const llmAnalyzer = new LLMAnalyzer();
+const vitalityAnalyzer = new VitalityAnalyzer();
 
 connection.onInitialize((_params: InitializeParams) => {
   const result: InitializeResult = {
@@ -64,11 +66,16 @@ async function runFullAnalysis(
 ): Promise<void> {
   const uri = textDocument.uri;
 
-  const llmResults = await llmAnalyzer.analyze(textDocument, customDiagnostics);
+  // Run VITALITY analysis (synchronous, no LLM required) and LLM analysis in parallel.
+  const [vitalityResults, llmResults] = await Promise.all([
+    Promise.resolve(vitalityAnalyzer.analyze(textDocument)),
+    llmAnalyzer.analyze(textDocument, customDiagnostics),
+  ]);
 
-  const diagnostics = resultsToDiagnostics(llmResults);
+  const allResults = [...vitalityResults, ...llmResults];
+  const diagnostics = resultsToDiagnostics(allResults);
   connection.sendDiagnostics({ uri, diagnostics });
-  connection.console.log(`[Analysis] Sent ${diagnostics.length} diagnostics for ${uri}`);
+  connection.console.log(`[Analysis] Sent ${diagnostics.length} diagnostics for ${uri} (vitality: ${vitalityResults.length}, llm: ${llmResults.length})`);
 }
 
 export function resultsToDiagnostics(results: AnalysisResult[]): Diagnostic[] {
