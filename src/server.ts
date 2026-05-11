@@ -14,6 +14,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { LLMAnalyzer } from './analyzers/llm';
 import { VitalityAnalyzer } from './analyzers/vitality';
 import { CascadeAnalyzer } from './analyzers/cascade';
+import { FormationAnalyzer } from './analyzers/formation';
 import {
   AnalysisResult,
   LLMProxyRequest,
@@ -27,6 +28,7 @@ const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 const llmAnalyzer = new LLMAnalyzer();
 const vitalityAnalyzer = new VitalityAnalyzer();
 const cascadeAnalyzer = new CascadeAnalyzer();
+const formationAnalyzer = new FormationAnalyzer();
 
 connection.onInitialize((_params: InitializeParams) => {
   const result: InitializeResult = {
@@ -68,17 +70,18 @@ async function runFullAnalysis(
 ): Promise<void> {
   const uri = textDocument.uri;
 
-  // Run VITALITY, CASCADE analysis (synchronous, no LLM required) and LLM analysis in parallel.
-  const [vitalityResults, cascadeResults, llmResults] = await Promise.all([
+  // Run VITALITY, CASCADE, FORMATION analysis (synchronous, no LLM required) and LLM analysis in parallel.
+  const [vitalityResults, cascadeResults, formationResults, llmResults] = await Promise.all([
     Promise.resolve(vitalityAnalyzer.analyze(textDocument)),
     Promise.resolve(cascadeAnalyzer.analyze(textDocument)),
+    Promise.resolve(formationAnalyzer.analyze(textDocument)),
     llmAnalyzer.analyze(textDocument, customDiagnostics),
   ]);
 
-  const allResults = [...vitalityResults, ...cascadeResults, ...llmResults];
+  const allResults = [...vitalityResults, ...cascadeResults, ...formationResults, ...llmResults];
   const diagnostics = resultsToDiagnostics(allResults);
   connection.sendDiagnostics({ uri, diagnostics });
-  connection.console.log(`[Analysis] Sent ${diagnostics.length} diagnostics for ${uri} (vitality: ${vitalityResults.length}, cascade: ${cascadeResults.length}, llm: ${llmResults.length})`);
+  connection.console.log(`[Analysis] Sent ${diagnostics.length} diagnostics for ${uri} (vitality: ${vitalityResults.length}, cascade: ${cascadeResults.length}, formation: ${formationResults.length}, llm: ${llmResults.length})`);  
 }
 
 export function resultsToDiagnostics(results: AnalysisResult[]): Diagnostic[] {
